@@ -1,11 +1,38 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from app.core.config import settings
+import re
+
+
+def _clean_db_url(url: str) -> str:
+    """Fix empty port in DATABASE_URL (e.g. host:/dbname -> host/dbname)"""
+    return re.sub(r':(?=\/)', '', url)
+
+
+def _get_async_url() -> str:
+    url = _clean_db_url(settings.DATABASE_URL)
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return url
+
+
+def _get_sync_url() -> str:
+    url = _clean_db_url(settings.DATABASE_URL)
+    if url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql+asyncpg://"):
+        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+    elif url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+    return url
+
 
 # Async engine for FastAPI
 engine = create_async_engine(
-    settings.DATABASE_URL,
+    _get_async_url(),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
@@ -20,10 +47,9 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-# Sync engine for Celery tasks (convert postgresql+asyncpg to postgresql+psycopg2)
-sync_database_url = settings.DATABASE_URL.replace("postgresql+asyncpg://", "postgresql+psycopg2://")
+# Sync engine for Celery tasks
 sync_engine = create_engine(
-    sync_database_url,
+    _get_sync_url(),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
