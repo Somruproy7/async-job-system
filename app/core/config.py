@@ -1,0 +1,51 @@
+from pydantic_settings import BaseSettings
+from typing import List
+from functools import lru_cache
+
+
+class Settings(BaseSettings):
+    # App
+    APP_NAME: str = "Async Job System"
+    DEBUG: bool = False
+    SECRET_KEY: str = "change-this-in-production-use-strong-secret"
+    ALLOWED_HOSTS: List[str] = ["*"]
+    ALLOWED_ORIGINS: List[str] = ["*"]
+
+    # JWT
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+
+    # Database
+    DATABASE_URL: str = "postgresql+asyncpg://jobuser:jobpass@postgres:5432/jobsdb"
+    DATABASE_POOL_SIZE: int = 10
+    DATABASE_MAX_OVERFLOW: int = 20
+
+    # Redis / Celery
+    REDIS_URL: str = "redis://redis:6379/0"
+    CELERY_BROKER_URL: str = "redis://redis:6379/1"
+    CELERY_RESULT_BACKEND: str = "redis://redis:6379/2"
+
+    # Job settings
+    JOB_MAX_RETRIES: int = 3
+    JOB_RETRY_BACKOFF_SECONDS: int = 60
+    JOB_DEFAULT_TIMEOUT_SECONDS: int = 3600  # 1 hour
+    JOB_HIGH_PRIORITY_QUEUE: str = "high"
+    JOB_DEFAULT_QUEUE: str = "default"
+    JOB_LOW_PRIORITY_QUEUE: str = "low"
+
+    # Rate limiting
+    RATE_LIMIT_REQUESTS: int = 100
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = True
+
+
+@lru_cache()
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

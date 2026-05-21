@@ -1,0 +1,24 @@
+[build]
+builder = "dockerfile"
+dockerfilePath = "docker/Dockerfile.api"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+
+[[services]]
+name = "api"
+dockerfile = "docker/Dockerfile.api"
+
+[[services]]
+name = "worker"
+dockerfile = "docker/Dockerfile.worker"
+startCommand = "celery -A app.core.celery_app.celery_app worker --queues=high,default,low --pool=solo --loglevel=info"
+
+[[services]]
+name = "beat"
+dockerfile = "docker/Dockerfile.worker"
+startCommand = "celery -A app.core.celery_app.celery_app beat --loglevel=info"

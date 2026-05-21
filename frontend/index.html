@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JobSystem — Dashboard</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+    <!-- Login Page -->
+    <div id="loginPage" class="page active">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="auth-logo">
+                    <div class="auth-logo-icon">⚡</div>
+                    <h1>JobSystem</h1>
+                </div>
+                <p class="subtitle">async job processing dashboard</p>
+
+                <div id="loginError" class="error-message hidden"></div>
+
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" name="email" required placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" required placeholder="Enter password">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <span id="loginBtnText">Login</span>
+                        <span id="loginSpinner" class="spinner hidden"></span>
+                    </button>
+                </form>
+
+                <div class="register-link">
+                    Don't have an account? <a href="#" id="showRegister">Register</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Register Page -->
+    <div id="registerPage" class="page">
+        <div class="login-container">
+            <div class="login-card">
+                <div class="auth-logo">
+                    <div class="auth-logo-icon">📝</div>
+                    <h1>Create Account</h1>
+                </div>
+                <p class="subtitle">join the job system</p>
+
+                <div id="registerError" class="error-message hidden"></div>
+                <div id="registerSuccess" class="success-message hidden"></div>
+
+                <form id="registerForm">
+                    <div class="form-group">
+                        <label for="regEmail">Email</label>
+                        <input type="email" id="regEmail" name="email" required placeholder="user@example.com">
+                    </div>
+                    <div class="form-group">
+                        <label for="regUsername">Username</label>
+                        <input type="text" id="regUsername" name="username" required placeholder="username" minlength="3" maxlength="50" pattern="[a-zA-Z0-9_\-]+">
+                        <small>3–50 chars · letters, numbers, _ and - only</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword">Password</label>
+                        <input type="password" id="regPassword" name="password" required placeholder="Min 8 characters" minlength="8">
+                    </div>
+                    <button type="submit" class="btn btn-primary btn-block">
+                        <span id="registerBtnText">Register</span>
+                        <span id="registerSpinner" class="spinner hidden"></span>
+                    </button>
+                </form>
+
+                <div class="register-link">
+                    Already have an account? <a href="#" id="showLogin">Login</a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Page -->
+    <div id="dashboardPage" class="page">
+        <header class="dashboard-header">
+            <div class="header-content">
+                <div class="header-brand">
+                    <div class="header-brand-icon">⚡</div>
+                    <h1>JobSystem</h1>
+                    <div class="header-status">
+                        <span class="status-dot"></span>
+                        <span>live</span>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <span id="userInfo" class="user-info"></span>
+                    <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+                </div>
+            </div>
+        </header>
+
+        <div class="dashboard-content">
+            <!-- Stats Cards -->
+            <div class="stats-grid" id="statsGrid">
+                <div class="stat-card">
+                    <div class="stat-icon">📋</div>
+                    <div class="stat-label">Total Jobs</div>
+                    <div class="stat-value" id="totalJobs">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✅</div>
+                    <div class="stat-label">Completed</div>
+                    <div class="stat-value" id="successJobs">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">⚙️</div>
+                    <div class="stat-label">Running</div>
+                    <div class="stat-value" id="runningJobs">0</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">✗</div>
+                    <div class="stat-label">Failed</div>
+                    <div class="stat-value" id="failedJobs">0</div>
+                </div>
+            </div>
+
+            <!-- Jobs Table -->
+            <div class="table-container">
+                <div class="table-toolbar">
+                    <span class="table-title">Job Queue</span>
+                    <div style="display:flex;gap:10px;">
+                        <button id="createJobBtn" class="btn btn-primary">+ New Job</button>
+                        <button id="refreshBtn" class="btn btn-secondary">↻ Refresh</button>
+                    </div>
+                </div>
+                <table class="jobs-table">
+                    <thead>
+                        <tr>
+                            <th>Job Name</th>
+                            <th>Type</th>
+                            <th>Status</th>
+                            <th>Progress</th>
+                            <th>Priority</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="jobsTableBody">
+                        <tr>
+                            <td colspan="7" class="loading-row">
+                                <div class="spinner" style="margin: 0 auto 10px; border-color: rgba(245,158,11,0.2); border-top-color: var(--amber);"></div>
+                                Loading jobs...
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Job Modal -->
+    <div id="createJobModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Create New Job</h2>
+                <button class="modal-close" id="closeCreateModal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="createJobForm">
+                    <div class="form-group">
+                        <label for="jobName">Job Name</label>
+                        <input type="text" id="jobName" required placeholder="e.g., Process user images">
+                    </div>
+                    <div class="form-group">
+                        <label for="jobType">Job Type</label>
+                        <select id="jobType" required>
+                            <option value="image_processing">Image Processing</option>
+                            <option value="report_generation">Report Generation</option>
+                            <option value="email_sending">Email Sending</option>
+                            <option value="data_export">Data Export</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobPriority">Priority</label>
+                        <select id="jobPriority" required>
+                            <option value="high">High</option>
+                            <option value="default" selected>Default</option>
+                            <option value="low">Low</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="jobPayload">Payload (JSON)</label>
+                        <textarea id="jobPayload" rows="6" placeholder='{"key": "value"}'>{}</textarea>
+                        <small>Enter job-specific data as JSON</small>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" id="cancelCreateJob">Cancel</button>
+                        <button type="submit" class="btn btn-primary">Create Job</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Job Details Modal -->
+    <div id="jobDetailsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Job Details</h2>
+                <button class="modal-close" id="closeDetailsModal">&times;</button>
+            </div>
+            <div class="modal-body" id="jobDetailsContent">
+                <div class="spinner" style="margin: 0 auto; border-color: rgba(245,158,11,0.2); border-top-color: var(--amber);"></div>
+                Loading...
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

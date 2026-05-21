@@ -1,0 +1,157 @@
+version: "3.9"
+
+services:
+  # ── PostgreSQL ───────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: jobsystem_postgres
+    environment:
+      POSTGRES_USER: jobuser
+      POSTGRES_PASSWORD: jobpass
+      POSTGRES_DB: jobsdb
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U jobuser -d jobsdb"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: jobsystem_redis
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── FastAPI ──────────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    container_name: jobsystem_api
+    env_file: .env
+    ports:
+      - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ./app:/app/app  # hot reload in dev
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Celery Worker (default + high queues) ────────────────────────────────────
+  worker:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: jobsystem_worker
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --queues=high,default
+      --pool=solo
+      --loglevel=info
+      --hostname=worker-main@%h
+    volumes:
+      - ./app:/app/app
+    deploy:
+      replicas: 1
+      resources:
+        limits:
+          cpus: "2"
+          memory: 1G
+
+  # ── Celery Worker (low priority queue) ───────────────────────────────────────
+  worker-low:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: jobsystem_worker_low
+    env_file: .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      celery -A app.core.celery_app.celery_app worker
+      --queues=low
+      --pool=solo
+      --loglevel=info
+      --hostname=worker-low@%h
+    volumes:
+      - ./app:/app/app
+
+  # ── Celery Beat (scheduler) ──────────────────────────────────────────────────
+  beat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: jobsystem_beat
+    env_file: .env
+    depends_on:
+      - redis
+    command: >
+      celery -A app.core.celery_app.celery_app beat
+      --loglevel=info
+      --scheduler=celery.beat:PersistentScheduler
+
+  # ── Flower (Celery monitoring dashboard) ─────────────────────────────────────
+  flower:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.worker
+    container_name: jobsystem_flower
+    env_file: .env
+    depends_on:
+      - redis
+    ports:
+      - "5555:5555"
+    command: >
+      celery -A app.core.celery_app.celery_app flower
+      --port=5555
+      --basic_auth=admin:flowerpass
+      --url_prefix=flower
+
+  # ── Frontend Dashboard ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: jobsystem_frontend
+    ports:
+      - "3001:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: jobsystem_network
