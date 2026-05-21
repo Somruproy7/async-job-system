@@ -1,32 +1,26 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from app.core.config import settings
-import re
-
-
-def _clean_db_url(url: str) -> str:
-    """Fix empty port in DATABASE_URL (e.g. host:/dbname -> host/dbname)"""
-    return re.sub(r':(?=\/)', '', url)
 
 
 def _get_async_url() -> str:
-    url = _clean_db_url(settings.DATABASE_URL)
+    url = settings.DATABASE_URL
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        url = "postgresql+asyncpg://" + url[len("postgres://"):]
     elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
     return url
 
 
 def _get_sync_url() -> str:
-    url = _clean_db_url(settings.DATABASE_URL)
+    url = settings.DATABASE_URL
     if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql+psycopg2://", 1)
+        url = "postgresql+psycopg2://" + url[len("postgres://"):]
     elif url.startswith("postgresql+asyncpg://"):
-        url = url.replace("postgresql+asyncpg://", "postgresql+psycopg2://", 1)
+        url = "postgresql+psycopg2://" + url[len("postgresql+asyncpg://"):]
     elif url.startswith("postgresql://"):
-        url = url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
     return url
 
 
