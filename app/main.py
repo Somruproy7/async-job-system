@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
     import asyncio
     max_retries = 5
     retry_delay = 2
-    
+
     for attempt in range(max_retries):
         try:
             async with engine.begin() as conn:
@@ -28,11 +28,11 @@ async def lifespan(app: FastAPI):
                 await asyncio.sleep(retry_delay)
                 retry_delay *= 2  # Exponential backoff
             else:
-                print(f"❌ Failed to connect to database after {max_retries} attempts")
-                raise
-    
+                # Don't raise — let the app boot in degraded mode so /health is reachable
+                print(f"⚠️ Starting in degraded mode — DB unavailable after {max_retries} attempts: {e}")
+
     yield
-    
+
     # Shutdown: dispose engine
     await engine.dispose()
 
@@ -68,7 +68,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 async def health_check():
     """Health check endpoint with database connectivity test"""
     import os
-    
+
     health_status = {
         "status": "healthy",
         "service": "async-job-system",
@@ -78,7 +78,7 @@ async def health_check():
             "port": os.getenv("PORT", "8000"),
         }
     }
-    
+
     # Try to ping database
     try:
         from sqlalchemy import text
@@ -88,5 +88,5 @@ async def health_check():
     except Exception as e:
         health_status["database"] = f"error: {str(e)[:100]}"
         health_status["status"] = "degraded"
-    
+
     return health_status
