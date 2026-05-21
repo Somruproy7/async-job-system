@@ -1,32 +1,34 @@
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from sqlalchemy import create_engine
+from sqlalchemy.engine import make_url
 from app.core.config import settings
 
 
-def _get_async_url() -> str:
-    url = settings.DATABASE_URL
-    if url.startswith("postgres://"):
-        url = "postgresql+asyncpg://" + url[len("postgres://"):]
-    elif url.startswith("postgresql://"):
-        url = "postgresql+asyncpg://" + url[len("postgresql://"):]
-    return url
+def _build_url(raw: str, driver: str) -> str:
+    """
+    Parse the raw DATABASE_URL (any scheme variant Railway might provide),
+    swap the driver, and strip any empty port so SQLAlchemy doesn't choke.
+    """
+    # Normalise scheme so make_url can parse it
+    normalised = raw
+    for prefix in ("postgres://", "postgresql://", "postgresql+asyncpg://", "postgresql+psycopg2://"):
+        if normalised.startswith(prefix):
+            normalised = "postgresql://" + normalised[len(prefix):]
+            break
 
+    u = make_url(normalised)
 
-def _get_sync_url() -> str:
-    url = settings.DATABASE_URL
-    if url.startswith("postgres://"):
-        url = "postgresql+psycopg2://" + url[len("postgres://"):]
-    elif url.startswith("postgresql+asyncpg://"):
-        url = "postgresql+psycopg2://" + url[len("postgresql+asyncpg://"):]
-    elif url.startswith("postgresql://"):
-        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
-    return url
+    # Rebuild with the correct driver and without an empty port
+    return str(u.set(
+        drivername=f"postgresql+{driver}",
+        port=u.port if u.port else None,
+    ))
 
 
 # Async engine for FastAPI
 engine = create_async_engine(
-    _get_async_url(),
+    _build_url(settings.DATABASE_URL, "asyncpg"),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
@@ -43,7 +45,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Sync engine for Celery tasks
 sync_engine = create_engine(
-    _get_sync_url(),
+    _build_url(settings.DATABASE_URL, "psycopg2"),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
