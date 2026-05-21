@@ -1,4 +1,5 @@
 from pydantic_settings import BaseSettings
+from pydantic import field_validator
 from typing import List
 from functools import lru_cache
 
@@ -37,6 +38,17 @@ class Settings(BaseSettings):
     # Rate limiting
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_WINDOW_SECONDS: int = 60
+
+    @field_validator("DATABASE_URL", mode="before")
+    @classmethod
+    def fix_db_url(cls, v):
+        """Normalize Railway's postgresql:// to postgresql+asyncpg://"""
+        if v and isinstance(v, str):
+            if v.startswith("postgres://"):
+                return v.replace("postgres://", "postgresql+asyncpg://", 1)
+            if v.startswith("postgresql://"):
+                return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
 
     class Config:
         env_file = ".env"
