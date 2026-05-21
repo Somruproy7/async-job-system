@@ -10,26 +10,18 @@ from app.core.database import engine, Base
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create all tables (with retry logic for Railway)
-    import asyncio
-    max_retries = 5
-    retry_delay = 2
-
-    for attempt in range(max_retries):
-        try:
-            async with engine.begin() as conn:
-                await conn.run_sync(Base.metadata.create_all)
-            print("✅ Database connected and tables created")
-            break
-        except Exception as e:
-            if attempt < max_retries - 1:
-                print(f"⚠️ Database connection attempt {attempt + 1} failed: {e}")
-                print(f"   Retrying in {retry_delay}s...")
-                await asyncio.sleep(retry_delay)
-                retry_delay *= 2  # Exponential backoff
-            else:
-                # Don't raise — let the app boot in degraded mode so /health is reachable
-                print(f"⚠️ Starting in degraded mode — DB unavailable after {max_retries} attempts: {e}")
+    # Startup: single fast attempt to create tables.
+    # Do NOT retry with backoff here — each uvicorn worker runs this before it can
+    # serve requests, so a long retry loop blocks all workers and causes Railway's
+    # healthcheck to time out before any worker becomes ready.
+    # DB connectivity is reported on every /health request instead.
+    try:
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+        print("✅ Database connected and tables created")
+    except Exception as e:
+        # Don't raise — boot in degraded mode so /health is reachable immediately
+        print(f"⚠️ Starting in degraded mode — DB unavailable: {e}")
 
     yield
 
@@ -68,6 +60,7 @@ app.include_router(admin.router, prefix="/api/v1/admin", tags=["Admin"])
 async def health_check():
     """Health check endpoint with database connectivity test"""
     import os
+    import asyncio
 
     health_status = {
         "status": "healthy",
@@ -79,12 +72,18 @@ async def health_check():
         }
     }
 
-    # Try to ping database
-    try:
+    # Try to ping database with a hard timeout so this endpoint never hangs
+    async def _ping_db():
         from sqlalchemy import text
         async with engine.connect() as conn:
             await conn.execute(text("SELECT 1"))
+
+    try:
+        await asyncio.wait_for(_ping_db(), timeout=3.0)
         health_status["database"] = "connected"
+    except asyncio.TimeoutError:
+        health_status["database"] = "error: connection timed out"
+        health_status["status"] = "degraded"
     except Exception as e:
         health_status["database"] = f"error: {str(e)[:100]}"
         health_status["status"] = "degraded"
