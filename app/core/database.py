@@ -1,34 +1,35 @@
+import re
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
 from sqlalchemy import create_engine
-from sqlalchemy.engine import make_url
 from app.core.config import settings
 
 
-def _build_url(raw: str, driver: str) -> str:
+def _fix_url(raw: str, driver: str) -> str:
     """
-    Parse the raw DATABASE_URL (any scheme variant Railway might provide),
-    swap the driver, and strip any empty port so SQLAlchemy doesn't choke.
+    Convert any postgres URL variant to the correct SQLAlchemy driver URL,
+    and remove an empty port (host:/) before any library sees it.
     """
-    # Normalise scheme so make_url can parse it
-    normalised = raw
-    for prefix in ("postgres://", "postgresql://", "postgresql+asyncpg://", "postgresql+psycopg2://"):
-        if normalised.startswith(prefix):
-            normalised = "postgresql://" + normalised[len(prefix):]
+    # Remove empty port: "host:/" -> "host/" but leave "://" alone
+    url = re.sub(r'(?<=[^:]):/(?=[^/])', '/', raw)
+
+    # Replace scheme
+    for prefix in (
+        "postgresql+asyncpg://",
+        "postgresql+psycopg2://",
+        "postgresql://",
+        "postgres://",
+    ):
+        if url.startswith(prefix):
+            url = f"postgresql+{driver}://" + url[len(prefix):]
             break
 
-    u = make_url(normalised)
-
-    # Rebuild with the correct driver and without an empty port
-    return str(u.set(
-        drivername=f"postgresql+{driver}",
-        port=u.port if u.port else None,
-    ))
+    return url
 
 
 # Async engine for FastAPI
 engine = create_async_engine(
-    _build_url(settings.DATABASE_URL, "asyncpg"),
+    _fix_url(settings.DATABASE_URL, "asyncpg"),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
@@ -45,7 +46,7 @@ AsyncSessionLocal = async_sessionmaker(
 
 # Sync engine for Celery tasks
 sync_engine = create_engine(
-    _build_url(settings.DATABASE_URL, "psycopg2"),
+    _fix_url(settings.DATABASE_URL, "psycopg2"),
     pool_size=settings.DATABASE_POOL_SIZE,
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
