@@ -34,6 +34,7 @@ engine = create_async_engine(
     max_overflow=settings.DATABASE_MAX_OVERFLOW,
     echo=settings.DEBUG,
     pool_pre_ping=True,
+    connect_args={"timeout": 5},  # asyncpg: fail fast instead of hanging indefinitely
 )
 
 AsyncSessionLocal = async_sessionmaker(
