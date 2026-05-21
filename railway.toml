@@ -7,5 +7,5 @@ dockerfilePath = "docker/Dockerfile.api"
 
 [deploy]
 healthcheckPath = "/health"
-healthcheckTimeout = 30
-startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT"
+healthcheckTimeout = 100
+startCommand = "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
